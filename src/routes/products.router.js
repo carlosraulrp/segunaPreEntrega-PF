@@ -1,34 +1,79 @@
-const {Router} = require('express')
-const {productModel} = require('../models/product.model')
-const router = Router()
+const { Router } = require("express");
+const { productModel } = require("../models/product.model");
+const router = Router();
 
-
-router.get("/", async(req, res)=>{
-    try {
-        let products = await productModel.find()
-        res.send({result:"succes", payload: products})
-    } catch (error) {
-        console.log(error)
+//GET
+router.get("/", async (req, res) => {
+  let { limit, page, sort, query } = req.query;
+  try {
+    const options = {};
+    options.limit = limit ? limit : 5;
+    if (sort) {
+      sort == 1 || sort == -1
+        ? (options.sort = { price: sort })
+        : res.send({ error: "El valor para ordenar debe ser 1 o -1" });
     }
-})
+    if (page) options.page = page;
+    query = query ? { category: query } : {};
 
-router.get("/", async(req, res)=>{
-    try {
-        let productFilter = await productModel.aggregate([
-            {$match: {category:"destilados"}}
-            
-            
-        ])
-        
-        res.send({result:"succes", payload: productFilter})
-    } 
-    
-    catch (error) {
-        console.log(error)
+    let products = await productModel.paginate(query, options);
+
+    const pageNumbers = [];
+    for (let i = 1; i <= products.totalPages; i++) {
+      pageNumbers.push({ number: i, current: i === products.page });
     }
+    let categories;
+    try {
+      const result = await productModel.distinct("category");
+      categories = result;
+      categories.push("Todas");
+    } catch (error) {}
 
+    res.render("products", {
+      status: "success",
+      payload: products.docs,
+      totalPages: products.totalPages,
+      prevPage: products.prevPage,
+      nextPage: products.nextPage,
+      page: products.page,
+      hasPrevPage: products.hasPrevPage,
+      hasNextPage: products.hasNextPage,
+      pageNumbers: pageNumbers,
+      categories: categories,
+    });
+  } catch (error) {
+    res.render("products", {
+      status: "error",
+    });
+  }
+});
 
-})
+router.get("/:id", async (req, res) => {
+  let id = req.params.id;
+  try {
+    const product = await productModel.findById(id);
 
+    res.render("product", {
+      payload: product,
+    });
+  } catch (error) {
+    res.status({
+      status: error,
+    });
+  }
+});
 
-module.exports = router
+router.get("/categories", async (req, res) => {
+  try {
+    const categories = await productModel.distinct("category");
+    res.send({
+      categories: categories,
+    });
+  } catch (error) {
+    res.render("products", {
+      status: error,
+    });
+  }
+});
+
+module.exports = router;
